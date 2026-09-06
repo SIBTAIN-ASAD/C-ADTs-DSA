@@ -120,33 +120,17 @@ void heapify(struct Customer *Heap_Collection, int size, int i){
 // Function used to sort the explored 
 // customer array bases on their
 // departure time
-void quickSort(struct Customer *CustArray, int a, int b){
-    int i, j, cen;
-    struct Customer currentWord;
-    if (a < b)
-    {
-        cen = a;
-        i = a;
-        j = b;
-        while (i < j)
-        {
-            while (CustArray[j].cus_work > CustArray[cen].cus_work)
-                j--;
-            while (CustArray[i].cus_work < CustArray[cen].cus_work && i < b)
-                i++;
-            if (i < j)
-            {
-                currentWord = CustArray[i];
-                CustArray[i] = CustArray[j];
-                CustArray[j] = currentWord;
-            }
-        }
-        currentWord = CustArray[cen];
-        CustArray[cen] = CustArray[j];
-        CustArray[j] = currentWord;
-        quickSort(CustArray, a, j - 1);
-        quickSort(CustArray, j + 1, b);
-    }
+static int compareCompletionTime(const void *left, const void *right)
+{
+    const struct Customer *a = left;
+    const struct Customer *b = right;
+    return (a->cus_work > b->cus_work) - (a->cus_work < b->cus_work);
+}
+
+void quickSort(struct Customer *CustArray, int a, int b)
+{
+    if (a >= b) return;
+    qsort(CustArray + a, (size_t)(b - a + 1), sizeof(*CustArray), compareCompletionTime);
 }
 
 //=========================================
@@ -242,7 +226,6 @@ void populate_heaps_file(const char* file)
   //variables to input data from file
   int number_of_customers = 0;
   int number_of_stylists = 0;
-  char str[20];
  
   // reading number_of_customers and number_of_stylists from the filre
   fscanf(infile, "%d %d", &number_of_customers, &number_of_stylists);
@@ -260,7 +243,7 @@ void populate_heaps_file(const char* file)
   struct Customer current;
   for (int i = 0; i < number_of_customers; i++)
   {
-      fscanf(infile, "%d %s %s %d %d", &current.cur_arv, &current.cus_Name, &current.sty_Name, &current.cus_loy, &current.cus_work);      
+      fscanf(infile, "%d %s %s %d %d", &current.cur_arv, current.cus_Name, current.sty_Name, &current.cus_loy, &current.cus_work);
       int cur_index = get_respected_heap_index(current);
       int put = 0;
       while(1)
