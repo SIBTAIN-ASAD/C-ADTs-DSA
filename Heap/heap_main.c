@@ -3,6 +3,9 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <ctype.h>
+#include <limits.h>
+#include <stdint.h>
 
 
 //=========================================
@@ -47,18 +50,57 @@ char sty_Names[10][20];                  //
 //=========================================
 // Function used to initilize all dynamic
 // memory for the program
-void Allocate_Dynamic_memory(int s_z)
+static void input_error(const char *message)
 {
-  s_z++;
-  size_collection = (int*)calloc(s_z , sizeof(int));
-  timeLine_collecction = (int*)calloc(s_z , sizeof(int));
-  
-  Heap_Collection = malloc(s_z * sizeof(struct Customer*));
+  fprintf(stderr, "%s\n", message);
+  exit(EXIT_FAILURE);
+}
+
+static void *checked_calloc(size_t count, size_t width)
+{
+  if (count > SIZE_MAX / width) input_error("Input is too large");
+  void *memory = calloc(count ? count : 1, width);
+  if (!memory) input_error("Unable to allocate memory");
+  return memory;
+}
+
+void Allocate_Dynamic_memory(int s_z, int customers)
+{
+  size_collection = checked_calloc((size_t)s_z, sizeof(int));
+  timeLine_collecction = checked_calloc((size_t)s_z, sizeof(int));
+  Heap_Collection = checked_calloc((size_t)s_z, sizeof(*Heap_Collection));
   for (int i = 0; i < s_z; i++)
-  {
-    Heap_Collection[i] = malloc(100 * sizeof(struct Customer)); 
+    Heap_Collection[i] = checked_calloc((size_t)customers, sizeof(struct Customer));
+  explored_customers = checked_calloc((size_t)customers, sizeof(struct Customer));
+}
+
+/* Read a whole token: a width-limited fscanf alone can split a long name. */
+static void read_token(FILE *file, char *buffer, size_t capacity)
+{
+  int ch;
+  do { ch = fgetc(file); } while (ch != EOF && isspace((unsigned char)ch));
+  if (ch == EOF) input_error("Incomplete input");
+  size_t length = 0;
+  do {
+    if (length + 1 >= capacity) input_error("Input token is too long");
+    buffer[length++] = (char)ch;
+    ch = fgetc(file);
+  } while (ch != EOF && !isspace((unsigned char)ch));
+  buffer[length] = '\0';
+}
+
+static int read_number(FILE *file)
+{
+  char token[32];
+  read_token(file, token, sizeof(token));
+  unsigned int value = 0;
+  for (size_t i = 0; token[i]; i++) {
+    if (token[i] < '0' || token[i] > '9') input_error("Expected a nonnegative integer");
+    unsigned int digit = (unsigned int)(token[i] - '0');
+    if (value > ((unsigned int)INT_MAX - digit) / 10) input_error("Integer is too large");
+    value = value * 10 + digit;
   }
-  explored_customers = malloc(100 * sizeof(struct Customer));
+  return (int)value;
 }
 
 //=========================================
@@ -195,11 +237,15 @@ void make_customers_exit(){
 
 
     int size = size_collection[i];
+    if (size == 0) continue;
     timeLine_collecction[i] = Heap_Collection[i][0].cur_arv;
     // leaving and recording in time way
     for (int j = 0; j < size; j++)
     {
         current_cus = Heap_Collection[i][j];
+        if (current_cus.cus_loy > INT_MAX - current_cus.cus_work / 10 ||
+            current_cus.cus_work > INT_MAX - timeLine_collecction[i])
+          input_error("Customer result exceeds integer range");
         current_cus.cus_loy = current_cus.cus_loy + current_cus.cus_work/10;
         current_cus.cus_work = current_cus.cus_work + timeLine_collecction[i];
         timeLine_collecction[i] = current_cus.cus_work;
@@ -219,8 +265,7 @@ void populate_heaps_file(const char* file)
 
   // file open validation
   if (!infile){
-      printf("Corrupt infile");
-      exit(0);
+      input_error("Unable to open input file");
   }
 
   //variables to input data from file
@@ -228,22 +273,29 @@ void populate_heaps_file(const char* file)
   int number_of_stylists = 0;
  
   // reading number_of_customers and number_of_stylists from the filre
-  fscanf(infile, "%d %d", &number_of_customers, &number_of_stylists);
+  number_of_customers = read_number(infile);
+  number_of_stylists = read_number(infile);
+  if (number_of_stylists < 1 || number_of_stylists > 10)
+    input_error("Expected between 1 and 10 stylists");
   sty_number = number_of_stylists;
 
   // calling allocation function
-  Allocate_Dynamic_memory(sty_number);
+  Allocate_Dynamic_memory(sty_number, number_of_customers);
 
   // reading stylists names
   for (int i = 0; i < number_of_stylists; i++){
-      fscanf(infile, "%s", sty_Names[i]);
+      read_token(infile, sty_Names[i], sizeof(sty_Names[i]));
   }
 
   // reading all customers data
-  struct Customer current;
+  struct Customer current = {0};
   for (int i = 0; i < number_of_customers; i++)
   {
-      fscanf(infile, "%d %s %s %d %d", &current.cur_arv, current.cus_Name, current.sty_Name, &current.cus_loy, &current.cus_work);
+      current.cur_arv = read_number(infile);
+      read_token(infile, current.cus_Name, sizeof(current.cus_Name));
+      read_token(infile, current.sty_Name, sizeof(current.sty_Name));
+      current.cus_loy = read_number(infile);
+      current.cus_work = read_number(infile);
       int cur_index = get_respected_heap_index(current);
       int put = 0;
       while(1)
@@ -271,6 +323,7 @@ void showOutput(const char * outfile)
 {
   FILE * file2;
   file2 = fopen(outfile, "w");
+  if (!file2) input_error("Unable to open output file");
   for (int i = 0; i < total_customers; i++)
   {
       printf("%s %d %d %s\n", explored_customers[i].cus_Name, explored_customers[i].cus_work, explored_customers[i].cus_loy, explored_customers[i].sty_Name);    
@@ -288,7 +341,7 @@ void freeMemory()
   free(timeLine_collecction);
   for (int i = 0; i < sty_number; i++)
   {
-    free(Heap_Collection[i]);
+    if (Heap_Collection) free(Heap_Collection[i]);
   }
   free(Heap_Collection);
   free(explored_customers);
@@ -299,11 +352,11 @@ void freeMemory()
 // of the code
 void RunCode()
 {
+    if (atexit(freeMemory) != 0) input_error("Unable to register memory cleanup");
     populate_heaps_file("in.txt");
     make_customers_exit();
     quickSort(explored_customers, 0, total_customers-1);
     showOutput("out.txt");
-    freeMemory();
 }
 
 
