@@ -27,3 +27,13 @@ empty trees, and exporting 150 unique words. Input tests compile a sanitized
 binary and use temporary files to check duplicate frequencies, truncated commands,
 empty input, and overlong tokens. The word limit remains 19 characters; longer
 words are rejected, not silently truncated.
+
+Heap input and capacity regressions (requires Python 3 and Clang/GCC):
+
+```sh
+python3 tests/test_heap_input.py
+```
+
+These compile the program with address/undefined sanitizers and exercise 150
+customers, empty stylist queues, header validation, bounded names, incomplete
+records, and arithmetic overflow rejection.
