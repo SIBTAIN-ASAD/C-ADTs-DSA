@@ -8,18 +8,19 @@ This program also show the sorted and unsorted data on the concole screen
 #include <stdio.h>
 #include<string.h>
 #include <stdlib.h>
+#include <ctype.h>
+#include <limits.h>
 
 
 //============================================================================
 //  Tree_Node, ValueNode Class
 //============================================================================
+struct ValueNode {
+    char Node_value[20];
+    int fre_of_value;
+};
+
 struct tree_Node{ //tree node struct
-
-    struct ValueNode{ //Value struct to hold values
-	    char Node_value[20];
-	    int fre_of_value;
-    };
-
 	struct ValueNode NodeValue; // node of value      
 	struct tree_Node* left;		                         
 	struct tree_Node* right;
@@ -200,6 +201,7 @@ struct tree_Node*  addRecursive(struct tree_Node** NodeA, struct tree_Node* Node
 
 		if(strcmp(NodeValue->NodeValue.Node_value, (*NodeA)->NodeValue.Node_value) == 0){ //check for same
 			(*NodeA)->NodeValue.fre_of_value++;
+            free(NodeValue);
 		}
 		else{
 
@@ -223,10 +225,18 @@ void add(const char* value){ //to add the given string in the tree
 
 	struct tree_Node *NodeValue;
 
-    NodeValue = (struct tree_Node*) malloc(sizeof(struct tree_Node)); //creating tree node
+    if (value == NULL || strlen(value) >= sizeof(NodeValue->NodeValue.Node_value)) {
+        fprintf(stderr, "Words must contain at most 19 characters.\n");
+        return;
+    }
+    NodeValue = malloc(sizeof(*NodeValue));
+    if (NodeValue == NULL) {
+        fprintf(stderr, "Unable to allocate tree node.\n");
+        exit(EXIT_FAILURE);
+    }
 
     int i;
-	for (i = 0; i < 20 && value[i] != '\0'; i++){ //storing data in the node
+	for (i = 0; i < 19 && value[i] != '\0'; i++){ //storing data in the node
 
 		NodeValue->NodeValue.Node_value[i] = value[i];
 	}
@@ -241,9 +251,24 @@ void add(const char* value){ //to add the given string in the tree
 }
 
 
+static size_t countNodes(const struct tree_Node *node)
+{
+    return node == NULL ? 0 : 1 + countNodes(node->left) + countNodes(node->right);
+}
+
 void ArrayFunctionality(FILE **f2){ //driver function to perform array actions
 
-    struct ValueNode arr[100]; // array to structs
+    size_t count = countNodes(root);
+    if (count == 0) return;
+    if (count > INT_MAX || count > (size_t)-1 / sizeof(struct ValueNode)) {
+        fprintf(stderr, "Too many unique words.\n");
+        exit(EXIT_FAILURE);
+    }
+    struct ValueNode *arr = malloc(count * sizeof(*arr));
+    if (arr == NULL) {
+        fprintf(stderr, "Unable to allocate word array.\n");
+        exit(EXIT_FAILURE);
+    }
     int val = 0;
     int* array_size = &val;
 
@@ -258,6 +283,7 @@ void ArrayFunctionality(FILE **f2){ //driver function to perform array actions
 
     printValueArray(arr, val); //printing array after sorting
     AddtoFile(arr, val, *f2);
+    free(arr);
 }
 
 
@@ -268,14 +294,20 @@ void run_test(const char* input_file, const char* output_file){ // driver of the
     FILE *f2;
     openFiles(&f1,&f2, input_file, output_file); //opening files
     int commands, action; //input command
-    char * value; 
-    value = (char*) malloc(20 * sizeof(char));  //char array to input string
+    char value[20];
     struct tree_Node* NodeA; //  node to store finded address
-    fscanf(f1,"%d", &commands); 
+    if (fscanf(f1, "%d", &commands) != 1 || commands < 0) commands = 0;
     for(int i = 0; i < commands; i++)
     {
-        fscanf(f1,"%d", &action);
-        fscanf(f1,"%s", value);
+        if (fscanf(f1, "%d", &action) != 1 || fscanf(f1, "%19s", value) != 1) {
+            fprintf(stderr, "Incomplete command.\n");
+            break;
+        }
+        int next = fgetc(f1);
+        if (next != EOF && !isspace((unsigned char)next)) {
+            fprintf(stderr, "Word exceeds 19 characters.\n");
+            break;
+        }
 
         switch(action){
             case 1:
@@ -303,7 +335,6 @@ void run_test(const char* input_file, const char* output_file){ // driver of the
     ArrayFunctionality(&f2);
     FreeHeap(root);
     root = NULL;
-    free(value);
     fclose(f1);
     fclose(f2);
 }
